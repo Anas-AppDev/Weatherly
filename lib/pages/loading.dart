@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:mausam_app/pages/home.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+
 import 'package:mausam_app/worker/worker.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:lottie/lottie.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class LoadingPage extends StatefulWidget {
   const LoadingPage({super.key});
@@ -15,43 +19,87 @@ class _LoadingPageState extends State<LoadingPage> {
 
   var city_name = "loading";
 
-  void callAPI(String city_name) async{
+  var isLocFetched = false;
 
-    Worker jaspur = Worker(city: city_name);
-    await jaspur.getAPIdata();
+  var currentCity = "loading";
 
-    print("Name : "+jaspur.name);
+  Future<void> getCurrentLocation() async {
+    // Check and request location permissions
+    var status = await Permission.location.request();
+    if (status == PermissionStatus.granted) {
+      try {
+        Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high);
 
-    setState(() {
-      city_name=jaspur.name;
-    });
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+            position.latitude, position.longitude);
 
-    print("Description : "+jaspur.desc);
-    print("Windspeed : "+jaspur.windspeed);
-    print("Temperature : "+jaspur.temp);
-    print("Humidity : "+jaspur.humidity);
-    print("Icon : "+jaspur.icon);
-
-    Future.delayed(Duration(seconds: 1), (){
-      Navigator.pushReplacementNamed(context, '/home', arguments: {
-        "keyName" : jaspur.name,
-        "keyDesc" : jaspur.desc,
-        "keyWindspeed" : jaspur.windspeed,
-        "keyTemp" : jaspur.temp,
-        "keyHumidity" : jaspur.humidity,
-        "keyIcon" : jaspur.icon,
-      });
-    });
-
+        if (placemarks.isNotEmpty) {
+          Placemark currentPlacemark = placemarks[0];
+          setState(() {
+            currentCity = currentPlacemark.locality ?? "Unknown City";
+            isLocFetched = true;
+          });
+        }
+      } catch (e) {
+        print("Error getting current location: $e");
+      }
+    } else {
+      currentCity = "Noida";
+      isLocFetched=true;
+      print("Location permission denied");
+    }
   }
+
+  void callAPI(String city_name) async {
+    try {
+      Worker jaspur = Worker(city: city_name);
+      await jaspur.getAPIdata();
+
+      // Check if the widget is still mounted before calling setState
+      if (mounted) {
+        setState(() {
+          city_name = jaspur.name;
+        });
+      }
+
+      print("Description : " + jaspur.desc);
+      print("Windspeed : " + jaspur.windspeed);
+      print("Temperature : " + jaspur.temp);
+      print("Humidity : " + jaspur.humidity);
+      print("Icon : " + jaspur.icon);
+
+      // Rest of your code...
+
+      Future.delayed(Duration(seconds: 1), () {
+        // Check if the widget is still mounted before navigating
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home', arguments: {
+            "keyName": jaspur.name,
+            "keyDesc": jaspur.desc,
+            "keyWindspeed": jaspur.windspeed,
+            "keyTemp": jaspur.temp,
+            "keyHumidity": jaspur.humidity,
+            "keyIcon": jaspur.icon,
+          });
+        }
+      });
+    } catch (e) {
+      print("Error in callAPI: $e");
+      // Handle errors here
+    }
+  }
+
 
   @override
   void initState() {
     super.initState();
 
+    getCurrentLocation();
     print("init called");
 
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -59,57 +107,43 @@ class _LoadingPageState extends State<LoadingPage> {
 
     if (homeMap?.isNotEmpty ?? false){
       city_name = homeMap?['searchData'];
+      callAPI(city_name);
     }
     else{
-      city_name = "Noida";
+      if (isLocFetched){
+
+      city_name = currentCity;
+      callAPI(city_name);
+      }
     }
-    callAPI(city_name);
+
+    var screenWidth = MediaQuery.of(context).size.width;
+    var screenHeight = MediaQuery.of(context).size.height;
+    var devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
 
     return Scaffold(
       body: Stack(
         children: [
-          Expanded(
-              child: Lottie.network("https://assets5.lottiefiles.com/packages/lf20_HlhzUG.json", height: double.infinity, width: double.infinity, fit: BoxFit.cover),),
+          Lottie.network("https://assets5.lottiefiles.com/packages/lf20_HlhzUG.json", height: double.infinity, width: double.infinity, fit: BoxFit.cover),
           SingleChildScrollView(
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(height: 60,),
-                  Text("$city_name", style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xffe7ebf4), fontFamily: 'Jost'),),
-                  SizedBox(height: 260,),
-                  SpinKitFoldingCube(size: 50, color: Colors.white38,),
-                  SizedBox(height: 240,),
-                  Text("Mausam App", style: TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Color(0xffe7ebf4), fontFamily: 'Comforter'),),
-                  Text("Discover the world through weather's ever-changing canvas.", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xffe7ebf4), fontStyle: FontStyle.italic, fontFamily: 'Jost'), ),
-
-
+                  SizedBox(height: 100.h,),
+                  Text("$city_name", style: TextStyle(fontSize: 45.sp, fontWeight: FontWeight.bold, color: Color(0xffe7ebf4), fontFamily: 'Jost'),),
+                  SizedBox(height: 270.h,),
+                  SpinKitFoldingCube(size: 50.w, color: Colors.white38,),
+                  SizedBox(height: 250.h,),
+                  Text("Mausam App", style: TextStyle(fontSize: 65.sp, fontWeight: FontWeight.bold, color: Color(0xffe7ebf4), fontFamily: 'Comforter'),),
+                  Text("Discover the world through weather's ever-changing canvas.", style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500, color: Color(0xffe7ebf4), fontStyle: FontStyle.italic, fontFamily: 'Jost'), ),
                 ],
               ),
             ),
           ),
         ],
       ),
-      // body: SingleChildScrollView(
-      //   child: Center(
-      //     child: Column(
-      //       mainAxisAlignment: MainAxisAlignment.center,
-      //       children: [
-      //         ElevatedButton(
-      //           onPressed: (){
-      //             Navigator.pushNamed(context, "/home");
-      //           },
-      //           child: Text("GOTO HOME"),
-      //         ),
-      //         Text("City : $city_name"),
-      //         SpinKitChasingDots(
-      //           size: 50,
-      //           color: Colors.black,
-      //         )
-      //       ],
-      //     ),
-      //   ),
-      // ),
     );
   }
 }
+
